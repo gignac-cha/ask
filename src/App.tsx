@@ -1,50 +1,57 @@
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
 import { invoke } from "@tauri-apps/api/core";
+import { ChatLog, Message } from "./components/ChatLog";
+import { ChatInput } from "./components/ChatInput";
 import "./App.css";
 
 function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  const handleSendMessage = async (userMessage: string) => {
+    // Add user message to chat
+    const newUserMessage: Message = { role: "user", content: userMessage };
+    setMessages((prev) => [...prev, newUserMessage]);
+
+    setIsProcessing(true);
+
+    try {
+      // Call Tauri command (will implement in P0-2)
+      const response = await invoke<string>("handle_user_query", {
+        query: userMessage
+      });
+
+      // Add AI response to chat
+      const aiMessage: Message = { role: "assistant", content: response };
+      setMessages((prev) => [...prev, aiMessage]);
+    } catch (error) {
+      console.error("Error processing query:", error);
+      const errorMessage: Message = {
+        role: "assistant",
+        content: `Error: ${error}`
+      };
+      setMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
+    <div className="app-container">
+      <div className="main-panel">
+        <ChatLog messages={messages} />
+        <ChatInput
+          onSendMessage={handleSendMessage}
+          disabled={isProcessing}
         />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      </div>
+      <div className="side-panel">
+        <div className="webview-placeholder">
+          <h3>Browser View</h3>
+          <p>AI's browser activity will be displayed here</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
