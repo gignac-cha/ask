@@ -144,6 +144,9 @@ fn create_browser_tools() -> Vec<Tool> {
 async fn call_gemini_api(query: String, api_key: String, model: String) -> Result<String, String> {
     let tools = create_browser_tools();
 
+    // Remove "models/" prefix if present (API returns "models/gemini-1.5-pro" but endpoint expects just "gemini-1.5-pro")
+    let model_id = model.strip_prefix("models/").unwrap_or(&model);
+
     let request_body = GeminiRequest {
         contents: vec![Content {
             parts: vec![Part {
@@ -163,7 +166,7 @@ async fn call_gemini_api(query: String, api_key: String, model: String) -> Resul
     let response = client
         .post(format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            model, api_key
+            model_id, api_key
         ))
         .json(&request_body)
         .send()
@@ -235,9 +238,9 @@ async fn handle_user_query(app: tauri::AppHandle, query: String) -> Result<Strin
         .unwrap_or("")
         .to_string();
 
-    let model = settings["model"]
+    let model_name = settings["modelName"]
         .as_str()
-        .unwrap_or("gemini-1.5-flash")
+        .unwrap_or("")
         .to_string();
 
     // Check if API key is set
@@ -248,8 +251,16 @@ async fn handle_user_query(app: tauri::AppHandle, query: String) -> Result<Strin
         );
     }
 
+    // Check if model is selected
+    if model_name.is_empty() {
+        return Err(
+            "Model not selected. Please go to Settings, fetch available models, and select one."
+                .to_string(),
+        );
+    }
+
     // Try to call Gemini API with saved settings
-    match call_gemini_api(query.clone(), api_key, model).await {
+    match call_gemini_api(query.clone(), api_key, model_name).await {
         Ok(response) => Ok(response),
         Err(e) => Err(e),
     }
@@ -294,6 +305,39 @@ async fn execute_browser_actions(actions: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn fetch_gemini_models(api_key: String) -> Result<String, String> {
+    println!("Fetching Gemini models with API key");
+
+    let client = reqwest::Client::new();
+    let url = format!(
+        "https://generativelanguage.googleapis.com/v1beta/models?key={}",
+        api_key
+    );
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to fetch models: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let error_text = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "Unknown error".to_string());
+        return Err(format!("API error ({}): {}", status, error_text));
+    }
+
+    let response_text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    Ok(response_text)
+}
+
+#[tauri::command]
 async fn save_settings(app: tauri::AppHandle, settings: String) -> Result<(), String> {
     use tauri_plugin_store::StoreExt;
 
@@ -335,6 +379,7 @@ pub fn run() {
             greet,
             handle_user_query,
             execute_browser_actions,
+            fetch_gemini_models,
             save_settings,
             load_settings
         ])

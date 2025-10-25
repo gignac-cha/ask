@@ -6,21 +6,25 @@ import "./SettingsPage.css";
 interface Settings {
   service: string;
   apiKey: string;
-  model: string;
+  modelName: string;
 }
 
-const GEMINI_MODELS = [
-  "gemini-1.5-pro",
-  "gemini-1.5-flash",
-  "gemini-1.5-flash-latest",
-  "gemini-pro",
-];
+interface GeminiModel {
+  name: string;
+  displayName: string;
+}
+
+interface ModelsResponse {
+  models: GeminiModel[];
+}
 
 export function SettingsPage() {
   const navigate = useNavigate();
   const [service, setService] = useState("gemini");
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("gemini-1.5-flash");
+  const [modelName, setModelName] = useState("");
+  const [modelsList, setModelsList] = useState<GeminiModel[]>([]);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
 
@@ -35,21 +39,71 @@ export function SettingsPage() {
         const settings: Settings = JSON.parse(settingsJson);
         setService(settings.service || "gemini");
         setApiKey(settings.apiKey || "");
-        setModel(settings.model || "gemini-1.5-flash");
+        setModelName(settings.modelName || "");
       }
     } catch (error) {
       console.error("Failed to load settings:", error);
     }
   };
 
+  const handleFetchModels = async () => {
+    if (!apiKey) {
+      setMessage("Error: Please enter your API key first");
+      return;
+    }
+
+    setIsFetchingModels(true);
+    setMessage("");
+
+    try {
+      const responseJson = await invoke<string>("fetch_gemini_models", {
+        apiKey,
+      });
+
+      const response: ModelsResponse = JSON.parse(responseJson);
+
+      if (response.models && response.models.length > 0) {
+        // Filter to only include models that support generateContent
+        const filteredModels = response.models.filter(
+          (model) =>
+            model.name.includes("gemini") &&
+            !model.name.includes("embedding") &&
+            !model.name.includes("vision")
+        );
+
+        setModelsList(filteredModels);
+
+        // Auto-select first model if none selected
+        if (!modelName && filteredModels.length > 0) {
+          setModelName(filteredModels[0].name);
+        }
+
+        setMessage(`Successfully fetched ${filteredModels.length} models!`);
+        setTimeout(() => setMessage(""), 3000);
+      } else {
+        setMessage("Error: No models found");
+      }
+    } catch (error) {
+      console.error("Failed to fetch models:", error);
+      setMessage(`Error: ${error}`);
+    } finally {
+      setIsFetchingModels(false);
+    }
+  };
+
   const handleSave = async () => {
+    if (!modelName) {
+      setMessage("Error: Please fetch and select a model first");
+      return;
+    }
+
     setIsSaving(true);
     setMessage("");
 
     const settings: Settings = {
       service,
       apiKey,
-      model,
+      modelName,
     };
 
     try {
@@ -100,9 +154,7 @@ export function SettingsPage() {
           )}
 
           <div className="form-group">
-            <label htmlFor="apiKey">
-              {service === "gemini" ? "Gemini" : service === "openai" ? "OpenAI" : "Anthropic"} API Key
-            </label>
+            <label htmlFor="apiKey">Gemini API Key</label>
             <input
               id="apiKey"
               type="password"
@@ -125,26 +177,41 @@ export function SettingsPage() {
             )}
           </div>
 
+          <button
+            className="fetch-button"
+            onClick={handleFetchModels}
+            disabled={!isFormEnabled || !apiKey || isFetchingModels}
+          >
+            {isFetchingModels ? "Fetching Models..." : "Fetch Available Models"}
+          </button>
+
           <div className="form-group">
             <label htmlFor="model">Model</label>
             <select
               id="model"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              disabled={!isFormEnabled}
+              value={modelName}
+              onChange={(e) => setModelName(e.target.value)}
+              disabled={!isFormEnabled || modelsList.length === 0}
             >
-              {GEMINI_MODELS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
+              {modelsList.length === 0 ? (
+                <option value="">Click "Fetch Available Models" first</option>
+              ) : (
+                modelsList.map((model) => (
+                  <option key={model.name} value={model.name}>
+                    {model.displayName} ({model.name})
+                  </option>
+                ))
+              )}
             </select>
+            {modelsList.length > 0 && (
+              <small>{modelsList.length} models available</small>
+            )}
           </div>
 
           <button
             className="save-button"
             onClick={handleSave}
-            disabled={!isFormEnabled || isSaving || !apiKey}
+            disabled={!isFormEnabled || isSaving || !apiKey || !modelName}
           >
             {isSaving ? "Saving..." : "Save Settings"}
           </button>
