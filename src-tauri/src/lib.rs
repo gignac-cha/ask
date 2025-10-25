@@ -76,7 +76,7 @@ enum ResponsePart {
     },
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug)]
 struct FunctionCall {
     name: String,
     args: serde_json::Value,
@@ -456,7 +456,7 @@ async fn run_automation_loop(
     println!("Starting automation loop for query: {}", query);
 
     // Emit initial status
-    let _ = app.emit_all("automation-status", AutomationStatus {
+    let _ = app.emit("automation-status", AutomationStatus {
         message: "Starting automation...".to_string(),
         step: 0,
         total_steps: MAX_ITERATIONS,
@@ -482,7 +482,7 @@ Think about what website would be most helpful for this query and navigate there
     );
 
     // Emit status: Planning first action
-    let _ = app.emit_all("automation-status", AutomationStatus {
+    let _ = app.emit("automation-status", AutomationStatus {
         message: "Planning first action...".to_string(),
         step: 1,
         total_steps: MAX_ITERATIONS,
@@ -493,7 +493,7 @@ Think about what website would be most helpful for this query and navigate there
         Ok(resp) => resp,
         Err(e) => {
             eprintln!("Failed to get initial action from Gemini: {}", e);
-            let _ = app.emit_all("automation-complete", AutomationComplete {
+            let _ = app.emit("automation-complete", AutomationComplete {
                 success: false,
                 answer: None,
                 error: Some(format!("Failed to get initial action: {}", e)),
@@ -506,7 +506,7 @@ Think about what website would be most helpful for this query and navigate there
         Ok(action) => action,
         Err(e) => {
             eprintln!("Failed to extract initial action: {}", e);
-            let _ = app.emit_all("automation-complete", AutomationComplete {
+            let _ = app.emit("automation-complete", AutomationComplete {
                 success: false,
                 answer: None,
                 error: Some(format!("Failed to extract initial action: {}", e)),
@@ -529,7 +529,7 @@ Think about what website would be most helpful for this query and navigate there
             println!("Task completed: {}", final_answer);
 
             // Emit completion event
-            let _ = app.emit_all("automation-complete", AutomationComplete {
+            let _ = app.emit("automation-complete", AutomationComplete {
                 success: true,
                 answer: Some(final_answer),
                 error: None,
@@ -543,7 +543,7 @@ Think about what website would be most helpful for this query and navigate there
             current_action.name,
             serde_json::to_string(&current_action.args).unwrap_or_default()
         );
-        let _ = app.emit_all("automation-status", AutomationStatus {
+        let _ = app.emit("automation-status", AutomationStatus {
             message: action_message,
             step: iteration + 1,
             total_steps: MAX_ITERATIONS,
@@ -578,7 +578,7 @@ Think about what website would be most helpful for this query and navigate there
                 }
 
                 eprintln!("Could not recover from error, aborting automation");
-                let _ = app.emit_all("automation-complete", AutomationComplete {
+                let _ = app.emit("automation-complete", AutomationComplete {
                     success: false,
                     answer: None,
                     error: Some(e),
@@ -615,7 +615,7 @@ Think about what website would be most helpful for this query and navigate there
             current_action.name,
             result_summary
         );
-        let _ = app.emit_all("automation-status", AutomationStatus {
+        let _ = app.emit("automation-status", AutomationStatus {
             message: completion_message,
             step: iteration + 1,
             total_steps: MAX_ITERATIONS,
@@ -625,7 +625,7 @@ Think about what website would be most helpful for this query and navigate there
         // Emit screenshot update if available
         if let Some(screenshot) = step_result["screenshot"].as_str() {
             if let Some(url) = current_url.as_ref() {
-                let _ = app.emit_all("browser-view-update", BrowserViewUpdate {
+                let _ = app.emit("browser-view-update", BrowserViewUpdate {
                     screenshot: screenshot.to_string(),
                     url: url.clone(),
                 });
@@ -634,7 +634,7 @@ Think about what website would be most helpful for this query and navigate there
 
         if dom_info.is_null() {
             eprintln!("No DOM info available, cannot continue");
-            let _ = app.emit_all("automation-complete", AutomationComplete {
+            let _ = app.emit("automation-complete", AutomationComplete {
                 success: false,
                 answer: None,
                 error: Some("No DOM info available".to_string()),
@@ -643,7 +643,7 @@ Think about what website would be most helpful for this query and navigate there
         }
 
         // Emit status: Planning next action
-        let _ = app.emit_all("automation-status", AutomationStatus {
+        let _ = app.emit("automation-status", AutomationStatus {
             message: "Planning next action...".to_string(),
             step: iteration + 2,
             total_steps: MAX_ITERATIONS,
@@ -657,7 +657,7 @@ Think about what website would be most helpful for this query and navigate there
             Ok(resp) => resp,
             Err(e) => {
                 eprintln!("Failed to get next action from Gemini: {}", e);
-                let _ = app.emit_all("automation-complete", AutomationComplete {
+                let _ = app.emit("automation-complete", AutomationComplete {
                     success: false,
                     answer: None,
                     error: Some(format!("Failed to get next action: {}", e)),
@@ -670,7 +670,7 @@ Think about what website would be most helpful for this query and navigate there
             Ok(action) => action,
             Err(e) => {
                 eprintln!("Failed to extract next action: {}", e);
-                let _ = app.emit_all("automation-complete", AutomationComplete {
+                let _ = app.emit("automation-complete", AutomationComplete {
                     success: false,
                     answer: None,
                     error: Some(format!("Failed to extract next action: {}", e)),
