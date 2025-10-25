@@ -141,11 +141,7 @@ fn create_browser_tools() -> Vec<Tool> {
     }]
 }
 
-async fn call_gemini_api(query: String) -> Result<String, String> {
-    let api_key = env::var("GEMINI_API_KEY").map_err(|_| {
-        "GEMINI_API_KEY environment variable not set. Set it to use Gemini AI.".to_string()
-    })?;
-
+async fn call_gemini_api(query: String, api_key: String, model: String) -> Result<String, String> {
     let tools = create_browser_tools();
 
     let request_body = GeminiRequest {
@@ -166,8 +162,8 @@ async fn call_gemini_api(query: String) -> Result<String, String> {
     let client = reqwest::Client::new();
     let response = client
         .post(format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={}",
-            api_key
+            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+            model, api_key
         ))
         .json(&request_body)
         .send()
@@ -215,25 +211,46 @@ async fn call_gemini_api(query: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn handle_user_query(query: String) -> Result<String, String> {
+async fn handle_user_query(app: tauri::AppHandle, query: String) -> Result<String, String> {
+    use tauri_plugin_store::StoreExt;
+
     println!("Received query: {}", query);
 
-    // Try to call Gemini API
-    match call_gemini_api(query.clone()).await {
+    // Load settings from store
+    let store = app
+        .store("settings.json")
+        .map_err(|e| format!("Failed to access store: {}", e))?;
+
+    let settings_json = store
+        .get("app-settings")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "{}".to_string());
+
+    // Parse settings
+    let settings: serde_json::Value = serde_json::from_str(&settings_json)
+        .map_err(|e| format!("Failed to parse settings: {}", e))?;
+
+    let api_key = settings["apiKey"]
+        .as_str()
+        .unwrap_or("")
+        .to_string();
+
+    let model = settings["model"]
+        .as_str()
+        .unwrap_or("gemini-1.5-flash")
+        .to_string();
+
+    // Check if API key is set
+    if api_key.is_empty() {
+        return Err(
+            "API key not configured. Please go to Settings and enter your Gemini API key."
+                .to_string(),
+        );
+    }
+
+    // Try to call Gemini API with saved settings
+    match call_gemini_api(query.clone(), api_key, model).await {
         Ok(response) => Ok(response),
-        Err(e) if e.contains("GEMINI_API_KEY") => {
-            // If API key is not set, return a mock response
-            Ok(format!(
-                "Mock response (Set GEMINI_API_KEY to use real AI):\n\n\
-                 For query: '{}'\n\n\
-                 Planned actions:\n\
-                 1. goToURL(\"https://www.google.com\")\n\
-                 2. typeText(\"input[name='q']\", \"{}\")\n\
-                 3. click(\"input[type='submit']\")\n\
-                 4. getText(\".search-result\")",
-                query, query
-            ))
-        }
         Err(e) => Err(e),
     }
 }
@@ -276,14 +293,52 @@ async fn execute_browser_actions(actions: String) -> Result<String, String> {
     Ok(stdout.to_string())
 }
 
+#[tauri::command]
+async fn save_settings(app: tauri::AppHandle, settings: String) -> Result<(), String> {
+    use tauri_plugin_store::StoreExt;
+
+    let store = app
+        .store("settings.json")
+        .map_err(|e| format!("Failed to access store: {}", e))?;
+
+    store
+        .set("app-settings", serde_json::json!(settings))
+        .map_err(|e| format!("Failed to set settings: {}", e))?;
+
+    store
+        .save()
+        .map_err(|e| format!("Failed to save store: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn load_settings(app: tauri::AppHandle) -> Result<String, String> {
+    use tauri_plugin_store::StoreExt;
+
+    let store = app
+        .store("settings.json")
+        .map_err(|e| format!("Failed to access store: {}", e))?;
+
+    let settings = store
+        .get("app-settings")
+        .and_then(|v| v.as_str().map(|s| s.to_string()))
+        .unwrap_or_else(|| "{}".to_string());
+
+    Ok(settings)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             greet,
             handle_user_query,
-            execute_browser_actions
+            execute_browser_actions,
+            save_settings,
+            load_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
