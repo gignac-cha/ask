@@ -280,16 +280,31 @@ fn extract_function_call(response: &GeminiResponse) -> Result<FunctionCall, Stri
     }
 }
 
+// Helper function to find project root directory
+fn find_project_root() -> Result<std::path::PathBuf, String> {
+    let mut current = env::current_dir()
+        .map_err(|e| format!("Failed to get current directory: {}", e))?;
+
+    // Traverse up until we find a directory containing "scripts" and "src-tauri"
+    loop {
+        let scripts_dir = current.join("scripts");
+        let src_tauri_dir = current.join("src-tauri");
+
+        if scripts_dir.exists() && src_tauri_dir.exists() {
+            return Ok(current);
+        }
+
+        match current.parent() {
+            Some(parent) => current = parent.to_path_buf(),
+            None => return Err("Could not find project root directory".to_string()),
+        }
+    }
+}
+
 // Execute a single Playwright step
 async fn execute_playwright_step(action_json: String) -> Result<serde_json::Value, String> {
-    let current_dir =
-        env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
-
-    let script_path = current_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.join("scripts").join("playwright-step-executor.mjs"))
-        .ok_or_else(|| "Could not find scripts directory".to_string())?;
+    let project_root = find_project_root()?;
+    let script_path = project_root.join("scripts").join("playwright-step-executor.mjs");
 
     if !script_path.exists() {
         return Err(format!(
@@ -325,14 +340,8 @@ async fn execute_playwright_step(action_json: String) -> Result<serde_json::Valu
 
 // Cleanup Playwright browser
 async fn cleanup_playwright() -> Result<(), String> {
-    let current_dir =
-        env::current_dir().map_err(|e| format!("Failed to get current directory: {}", e))?;
-
-    let script_path = current_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.join("scripts").join("playwright-step-executor.mjs"))
-        .ok_or_else(|| "Could not find scripts directory".to_string())?;
+    let project_root = find_project_root()?;
+    let script_path = project_root.join("scripts").join("playwright-step-executor.mjs");
 
     if script_path.exists() {
         let _ = Command::new("node")
@@ -791,16 +800,9 @@ async fn handle_user_query(app: tauri::AppHandle, query: String) -> Result<Strin
 async fn execute_browser_actions(actions: String) -> Result<String, String> {
     println!("Executing browser actions: {}", actions);
 
-    // Get the project root directory (assuming we're in src-tauri/target/...)
-    let current_dir = env::current_dir()
-        .map_err(|e| format!("Failed to get current directory: {}", e))?;
-
-    // Look for scripts directory relative to current location
-    let script_path = current_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .map(|p| p.join("scripts").join("playwright-executor.mjs"))
-        .ok_or_else(|| "Could not find scripts directory".to_string())?;
+    // Get the project root directory
+    let project_root = find_project_root()?;
+    let script_path = project_root.join("scripts").join("playwright-executor.mjs");
 
     if !script_path.exists() {
         return Err(format!(
