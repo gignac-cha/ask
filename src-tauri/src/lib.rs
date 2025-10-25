@@ -345,6 +345,29 @@ async fn cleanup_playwright() -> Result<(), String> {
     Ok(())
 }
 
+// Check if the page contains CAPTCHA or bot detection
+fn is_captcha_page(page_title: &str) -> bool {
+    let title_lower = page_title.to_lowercase();
+
+    // Check for common CAPTCHA and bot detection phrases
+    let captcha_keywords = [
+        "i'm not a robot",
+        "i'm not a robot",  // Alternative apostrophe
+        "before you continue",
+        "captcha",
+        "human verification",
+        "verify you are human",
+        "confirm you're not a robot",
+        "security check",
+        "unusual traffic",
+        "automated requests",
+        "bot detection",
+        "suspicious activity",
+    ];
+
+    captcha_keywords.iter().any(|&keyword| title_lower.contains(keyword))
+}
+
 // Generate prompt for next step based on current state
 fn create_next_step_prompt(
     original_goal: &str,
@@ -609,6 +632,23 @@ Think about what website would be most helpful for this query and navigate there
 
         // Extract current URL from DOM info
         let current_url = dom_info["url"].as_str().map(|s| s.to_string());
+
+        // Check for CAPTCHA/bot detection BEFORE sending to Gemini
+        let page_title = dom_info["title"].as_str().unwrap_or("");
+        if is_captcha_page(page_title) {
+            eprintln!("CAPTCHA/bot detection page detected: {}", page_title);
+            let _ = app.emit("automation-complete", AutomationComplete {
+                success: false,
+                answer: None,
+                error: Some(
+                    "Error: Google 봇 감지(CAPTCHA) 페이지에 막혔습니다. 이 작업은 현재 수행할 수 없습니다."
+                        .to_string(),
+                ),
+            });
+            // Cleanup browser before exiting
+            let _ = cleanup_playwright().await;
+            return;
+        }
 
         // Emit status: Action completed
         let completion_message = format!(

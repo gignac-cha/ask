@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useNavigate } from "react-router-dom";
+import Draggable from "react-draggable";
 import { ChatLog, Message } from "../components/ChatLog";
 import { ChatInput } from "../components/ChatInput";
 import "./ChatPage.css";
@@ -126,20 +127,23 @@ export function ChatPage() {
             disabled={isProcessing}
           />
         </div>
-        <div className="side-panel">
-          {browserScreenshot ? (
-            <div className="browser-view">
-              <div className="browser-url">{browserUrl}</div>
-              <img src={browserScreenshot} alt="Browser view" />
-            </div>
-          ) : (
-            <div className="webview-placeholder">
-              <h3>Browser View</h3>
-              <p>AI's browser activity will appear here</p>
-            </div>
-          )}
-        </div>
       </div>
+
+      {/* Floating PIP Browser View */}
+      {browserScreenshot && (
+        <Draggable
+          handle=".pip-drag-handle"
+          bounds="parent"
+          defaultPosition={{ x: -420, y: -320 }}
+        >
+          <div className="pip-browser-view">
+            <div className="pip-drag-handle">
+              <div className="browser-url">{browserUrl}</div>
+            </div>
+            <img src={browserScreenshot} alt="Browser view" />
+          </div>
+        </Draggable>
+      )}
     </div>
   );
 }

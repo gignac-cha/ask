@@ -13,7 +13,7 @@ let globalPage = null;
 async function initBrowser() {
   if (!globalBrowser) {
     globalBrowser = await chromium.launch({
-      headless: true,
+      headless: false,
       args: ['--disable-blink-features=AutomationControlled']
     });
     const context = await globalBrowser.newContext({
