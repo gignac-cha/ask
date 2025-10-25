@@ -166,7 +166,11 @@ async function executeStep(actionJson) {
   } catch (error) {
     result.success = false;
     result.error = error.message;
-    result.currentUrl = await page.url().catch(() => 'unknown');
+    try {
+      result.currentUrl = page.url();
+    } catch (e) {
+      result.currentUrl = 'unknown';
+    }
   }
 
   return result;
