@@ -301,9 +301,7 @@ async fn save_settings(app: tauri::AppHandle, settings: String) -> Result<(), St
         .store("settings.json")
         .map_err(|e| format!("Failed to access store: {}", e))?;
 
-    store
-        .set("app-settings", serde_json::json!(settings))
-        .map_err(|e| format!("Failed to set settings: {}", e))?;
+    store.set("app-settings", serde_json::json!(settings));
 
     store
         .save()
