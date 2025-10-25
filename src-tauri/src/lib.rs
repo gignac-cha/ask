@@ -52,18 +52,28 @@ struct GeminiResponse {
 #[derive(Serialize, Deserialize, Debug)]
 struct Candidate {
     content: ResponseContent,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "finishReason")]
+    finish_reason: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    index: Option<i32>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 struct ResponseContent {
     parts: Vec<ResponsePart>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    role: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
 enum ResponsePart {
     Text { text: String },
-    FunctionCall { function_call: FunctionCall },
+    FunctionCall {
+        #[serde(rename = "functionCall")]
+        function_call: FunctionCall
+    },
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -182,10 +192,17 @@ async fn call_gemini_api(query: String, api_key: String, model: String) -> Resul
         return Err(format!("Gemini API error ({}): {}", status, error_text));
     }
 
-    let gemini_response: GeminiResponse = response
-        .json()
+    // Read response as text first to log it
+    let response_text = response
+        .text()
         .await
-        .map_err(|e| format!("Failed to parse Gemini response: {}", e))?;
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    println!("Gemini API Response: {}", response_text);
+
+    // Parse the response
+    let gemini_response: GeminiResponse = serde_json::from_str(&response_text)
+        .map_err(|e| format!("Failed to parse Gemini response: {}. Response was: {}", e, response_text))?;
 
     // Extract function calls or text response
     if let Some(candidate) = gemini_response.candidates.first() {
