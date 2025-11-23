@@ -1,0 +1,72 @@
+﻿<Window x:Class="WpfApp1.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:WpfApp1"
+        mc:Ignorable="d"
+        Title="Chrome PIP Demo - DWM Thumbnail" Height="1080" Width="1920">
+    <Grid>
+        <!-- Central Buttons -->
+        <StackPanel Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+            <Button x:Name="LaunchPipButton"
+                    Content="Launch Chrome PIP"
+                    Width="200"
+                    Height="50"
+                    FontSize="16"
+                    Margin="0,0,10,0"
+                    Click="LaunchPipButton_Click" />
+            
+            <Button x:Name="NaverButton"
+                    Content="Go to Naver"
+                    Width="200"
+                    Height="50"
+                    FontSize="16"
+                    Click="NaverButton_Click" />
+        </StackPanel>
+
+        <!-- PIP Container: DWM Thumbnail will render here -->
+        <Border x:Name="PipContainer"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Left"
+                Margin="20,500,0,0"
+                BorderBrush="DodgerBlue"
+                BorderThickness="3"
+                Background="Black"
+                Visibility="Collapsed"
+                Width="320"
+                Height="180"
+                Cursor="SizeAll"
+                MouseLeftButtonDown="PipContainer_MouseLeftButtonDown"
+                MouseMove="PipContainer_MouseMove"
+                MouseLeftButtonUp="PipContainer_MouseLeftButtonUp">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="15" ShadowDepth="5" Opacity="0.5"/>
+            </Border.Effect>
+            <!-- Resize Grip -->
+            <Grid>
+                <Rectangle x:Name="ResizeGrip"
+                          Width="15"
+                          Height="15"
+                          Fill="DodgerBlue"
+                          HorizontalAlignment="Right"
+                          VerticalAlignment="Bottom"
+                          Cursor="SizeNWSE"
+                          MouseLeftButtonDown="ResizeGrip_MouseLeftButtonDown"
+                          MouseMove="ResizeGrip_MouseMove"
+                          MouseLeftButtonUp="ResizeGrip_MouseLeftButtonUp" />
+            </Grid>
+        </Border>
+
+        <!-- Status Text (for debugging) -->
+        <TextBlock x:Name="StatusText"
+                   VerticalAlignment="Top"
+                   HorizontalAlignment="Left"
+                   Margin="10"
+                   FontSize="12"
+                   Foreground="Gray"
+                   Text="Click button to launch Chrome PIP" />
+    </Grid>
+</Window>
